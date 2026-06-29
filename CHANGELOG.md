@@ -90,3 +90,15 @@ Eval-loop ujawnił wady, których 3 rundy walidacji nie złapały. Naprawione:
 Benchmark iter2 vs iter1 (with-skill, ten sam grader): **19/20 (95%) vs 18/20 (90%)** — wzrost z
 naprawy przecieku brandu (TAIL). Nauka: grader liczył TAIL jako rekomendacje → poprawiony
 (rekomendacje = tylko P1/P2/P3). Pozostały 1 fail = brzegowy „ugc" P3 z osądu agenta (kalibracja).
+
+## 2026-06-29 — v2.2 (domenowo-agnostyczny domyślnie)
+Skill nie zakłada już żadnej „naszej" strony (wcześniej `--our-domain` domyślnie `double-digital.pl`
+→ filtrował relevance pod DD nawet bez kontekstu).
+
+- `--our-domain` i `--our-topics` są teraz **opcjonalne** (default None). Bez nich skill rankuje
+  strony **wg wartości do odtworzenia na gruncie samego konkurenta** (business-core vs brand/
+  generyk/traffic-bait) — wypluwa listę stron + najważniejsze frazy każdej, bez założeń o branży.
+- `--our-topics "nisza"` włącza OPCJONALNY filtr dopasowania pod własną niszę.
+- Nagłówki report/worksheet: „Tryb: ranking wg wartości strony" (bez niszy) lub „Filtr niszy: …".
+- SKILL.md przeramowane: relevance = „wartość strony do odtworzenia", nie „dopasowanie do DD";
+  usunięte twarde odniesienia do double-digital.pl z zasad osądu i przykładów.

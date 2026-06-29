@@ -5,13 +5,16 @@ description: Analizuje eksport widoczności konkurenta (Senuto/Ahrefs/SEMrush �
 
 # competitor-recon
 
-Z eksportu widoczności konkurenta robi **plan odtworzenia ruchu**: ranking jego stron wg
-tego, ile realnego, dopasowanego do NAS ruchu możemy przejąć, odtwarzając daną stronę.
+Z eksportu widoczności konkurenta robi **plan odtworzenia ruchu**: listę jego stron warte
+odtworzenia (z najważniejszymi frazami każdej), uszeregowaną wg tego, ile realnego ruchu da się
+przejąć. **Domyślnie domenowo-agnostyczny** — nie zakłada żadnej „naszej" strony; ocenia wartość
+każdej strony na gruncie samego konkurenta. Filtr pod własną niszę włączasz OPCJONALNIE
+(`--our-topics`).
 
 ## Filozofia (dlaczego tak)
 
 Surowy wolumen myli. Najwyższe wolumeny to zwykle frazy, na które **nie ma sensu** rankować:
-- **brandowe** — `kaman`, `kaman marketing` → nigdy ich nie przejmiemy, zero wartości dla nas;
+- **brandowe** — `kaman`, `kaman marketing` → cudzego brandu nie przejmiesz, zero wartości;
 - **generyczne/ambiwalentne** — `landing` (landing page? nauka angielskiego?), `biogram`
   (życiorys/CV? bio na IG?), `dropship`, `marketing`, `ugc` → 1 słowo, ogromny wolumen,
   rozjechana intencja, konkurent i tak ledwo rankuje (poz. 27–39);
@@ -40,10 +43,12 @@ Reguły flagujące frazę (skrypt): `brand` / `foreign` (wykluczone z ruchu) ·
 `local` (miasto PL) · `informational` (pytania jak/co/kiedy) · `neutral`.
 
 Composite score = `relevance × (0.6·√ruch + 0.2·szerokość_fraz + 0.2·komercja) × (1 − 0.3·KD)`,
-gdzie **relevance to TWÓJ osąd** dopasowania tematu do naszej domeny (0–1). `√ruch` = malejące
-zwroty (jeden duży outlier nie spłaszcza reszty); CPC jest winsoryzowane (cap 60 zł — wyżej to
-błąd danych Senuto). Strona z dużym ruchem, ale off-topic (np. „jak montować film" dla agencji
-SEO) dostaje niski relevance i ląduje w SKIP — ruch owszem, ale przyciąga złą publiczność.
+gdzie **relevance to TWÓJ osąd wartości strony DO ODTWORZENIA** (0–1) — czy to realna strona
+zarabiająca/autorytetowa konkurenta, czy raczej brand / generyk-śmieć / przynęta na ruch (zła
+publiczność). **Domyślnie liczy się sam grunt konkurenta** (nie żadna „nasza" domena). `√ruch` =
+malejące zwroty; CPC winsoryzowane (cap 60 zł — wyżej to błąd danych Senuto). Strona-przynęta
+z dużym ruchem, ale generyczna/przypadkowa (np. „starodawne gry" w sklepie eventowym) dostaje
+niski relevance i ląduje w SKIP — ruch owszem, ale przyciąga złą publiczność.
 
 **Tiery są WZGLĘDNE** — ranking osądzonych stron (P1 = top 20%, P2 do 55%, reszta P3), nie progi
 absolutne. Dzięki temu „category = P1" działa też dla małego konkurenta. **Twardy floor:**
@@ -59,13 +64,13 @@ Helper: `.claude/skills/competitor-recon/recon_tools.py`. Odpalaj `/usr/local/bi
 ### 1. Ingest
 ```bash
 /usr/local/bin/python3 .claude/skills/competitor-recon/recon_tools.py ingest \
-    "<plik.xlsx|csv>" --domain <domena-konkurenta> --our-domain double-digital.pl \
-    --top 40 --out <DIR>
+    "<plik.xlsx|csv>" --domain <domena-konkurenta> --top 40 --out <DIR>
 ```
-`--domain` możesz pominąć (auto z pierwszego URL). `--our-domain` = domena, którą ROZWIJAMY —
-domyślnie DD, ale gdy analizujesz konkurenta **klienta z innej branży**, podaj domenę klienta i
-**`--our-topics "opis niszy"`** (np. `--our-topics "team building, eventy firmowe, szkolenia"`),
-żeby ocena relevance dotyczyła właściwej niszy, a nie DD. `<DIR>` w scratchpadzie albo
+`--domain` możesz pominąć (auto z pierwszego URL). **Domyślnie bez żadnej „naszej" domeny** —
+skill rankuje strony wg wartości do odtworzenia. **OPCJONALNIE**, gdy chcesz filtrować pod
+konkretną niszę (np. analizujesz konkurenta swojej/klienta strony), dodaj
+**`--our-topics "opis niszy"`** (np. `--our-topics "team building, eventy firmowe, szkolenia"`) —
+wtedy strony spoza tej niszy dostaną niższy relevance. `<DIR>` w scratchpadzie albo
 `recon/<konkurent>/`. Powstają: `pages.json`, `keywords.csv`, `worksheet.md`.
 
 ### 2. Osąd semantyczny → judgments.json  (TO JEST TWOJA ROBOTA)
@@ -91,7 +96,7 @@ ruchu" gubił. Czego nie osądzisz, trafi do TAIL (poza rekomendacjami). Zapisz 
     "relevance": 0.4,
     "junk_keywords": ["biogram"],
     "content_type": "Wpis blogowy (poradnik IG bio)",
-    "note": "Duży ruch, ale 'biogram' samo w sobie ambiwalentne (CV/życiorys) i off-topic dla DD."
+    "note": "Duży ruch, ale 'biogram' samo w sobie ambiwalentne (CV/życiorys); reszta klastra OK."
   }
 }
 ```
@@ -106,17 +111,18 @@ Pola:
   (po wolumenie / po ruchu) — **zwykle dobry, ale weryfikuj**: odrzuć fragmenty (`promowania`),
   odwróconą intencję (`jak usunąć konto` przy stronie o zakładaniu) i ambiwalentne 1-słowowce.
   Wybierz najmocniejszą, jednoznaczną, komercyjnie/tematycznie trafną frazę.
-- **`relevance`** ∈ 0–1 — **dopasowanie tematu do domeny, którą ROZWIJAMY** (z `--our-domain` /
-  `--our-topics`; domyślnie double-digital.pl: SEO, Google/Meta Ads, performance, B2B).
-  To gate decydujące, oceniany na DWÓCH soczewkach naraz:
-  1. **Dopasowanie do niszy** — czy temat należy do tego, czym się zajmujemy. 0.9–1.0 = rdzeń
-     (dla DD: agencja, pozycjonowanie, kampanie, leady; dla klienta-eventowca: imprezy firmowe,
-     team building, integracja). 0.5–0.7 = sąsiednie. 0.1–0.3 = obca branża → SKIP.
-  2. **Business-core vs traffic-bait** — NAWET w obrębie niszy odróżniaj strony zarabiające/
-     budujące autorytet od **przynęt na ruch**: generyczne, wysokowolumenowe tematy ściągające
-     złą publiczność (np. dla eventowca „starodawne gry" vol 4400, „atrakcji" vol 450000, „fluo party";
-     dla DD „jak montować filmy"). Duży ruch + zerowa intencja zakupowa + brak związku z ofertą
-     ⇒ obniż relevance do 0.2–0.4, nawet jeśli temat luźno pasuje. Ruch ≠ wartość.
+- **`relevance`** ∈ 0–1 — **wartość strony DO ODTWORZENIA**. Gate decydujące o tierze.
+  **Domyślnie (bez `--our-topics`) oceniaj na gruncie samego konkurenta** — czy to strona, którą
+  realnie warto u siebie odtworzyć:
+  1. **Business-core vs śmieć** — 0.8–1.0 = realna strona zarabiająca/autorytetowa (kategoria,
+     usługa, money page, solidny on-topic poradnik). 0.4–0.6 = peryferyjna/słaba. 0.1–0.3 = brand,
+     generyk-śmieć, **przynęta na ruch** (generyczny, wysokowolumenowy temat ściągający złą
+     publiczność: „starodawne gry" vol 4400, „atrakcji" vol 450000, „fluo party"), SKU konkurenta,
+     system → SKIP. Duży ruch + zerowa intencja + temat przypadkowy ⇒ niski relevance. Ruch ≠ wartość.
+  2. **(OPCJONALNIE, tylko gdy podano `--our-topics`) Dopasowanie do TWOJEJ niszy** — dodatkowo
+     obniż relevance stronom spoza tematów, które rozwijasz (np. masz sklep z armaturą → blog HR
+     konkurenta-eventowca dostaje niżej). Bez `--our-topics` ten krok pomijasz — nie zakładaj
+     żadnej konkretnej branży „naszej" strony.
 
   **Progi (kalibruj świadomie — relevance steruje tierem):** `≥0.5` = kandydat do P1/P2 (im wyżej,
   tym wyżej w rankingu) · `0.3–0.49` = wpadnie max do P3 (twardy floor — tu ląduje traffic-bait
@@ -153,10 +159,10 @@ u góry raportu — brak jakiegoś typu (np. konkurent nie ma bloga) to często 
 
 1. **Brand = zawsze odpuść.** Strona, która żyje tylko z brandu konkurenta → SKIP (relevance niski).
 2. **1-słowowy head term z poz. >20 i rozjechaną intencją** (`dropship`, `landing`) → junk,
-   nie cel. Konkurent sam nie rankuje — my tym bardziej nie warto.
-3. **Wysoki CPC + money-words + miasto** = nasz priorytet #1 (klient płaci za taki ruch).
-4. **Duży ruch + CPC≈0 + intencja informacyjna** = blog topical-authority. Cenny, jeśli
-   on-topic dla DD; jeśli off-topic (hobby, sprawy prywatne) → SKIP mimo ruchu.
+   nie cel. Konkurent sam nie rankuje — odtwarzanie tym bardziej bez sensu.
+3. **Wysoki CPC + money-words + miasto** = priorytet #1 (taki ruch realnie konwertuje/sprzedaje).
+4. **Duży ruch + CPC≈0 + intencja informacyjna** = blog topical-authority. Cenny, jeśli to realny
+   temat biznesu konkurenta; jeśli przypadkowa przynęta (hobby, sprawy prywatne) → SKIP mimo ruchu.
 5. **main_keyword musi DOSŁOWNIE istnieć** jako realna fraza w klastrze — nie wymyślaj.
 6. Gdy strona ma frazy z kilku intencji (info + komercja), wybierz main_keyword po **wartości
    biznesowej**, nie po samym wolumenie.

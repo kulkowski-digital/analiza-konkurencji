@@ -12,6 +12,11 @@ brandowe (`kaman`), generyczne/ambiwalentne (`landing`, `biogram`, `dropship`), 
 A największą wartość mają często strony, które konkurent ledwo zajmuje, choć jest popyt
 (**open goals**). Ten skill rozdziela jedno od drugiego.
 
+**Domyślnie domenowo-agnostyczny:** nie zakłada żadnej „twojej" strony ani branży — ocenia każdą
+stronę na gruncie samego konkurenta (czy to realna money/autorytetowa strona, czy brand/śmieć/
+przynęta na ruch) i wypluwa listę stron do odtworzenia z najważniejszymi frazami. Filtr pod
+własną niszę włączasz **opcjonalnie** flagą `--our-topics`.
+
 ## Architektura (świadomy podział pracy)
 
 ```
@@ -53,8 +58,8 @@ przejąć ruch"). Skill uruchomi workflow. Ręcznie:
 
 ```bash
 # 1. Ingest — normalizacja, reguły, worksheet do osądu
-python3 recon_tools.py ingest "eksport.xlsx" --domain konkurent.pl \
-    --our-topics "twoja nisza, słowa kluczowe branży" --top 40 --out recon_out
+#    (--our-topics OPCJONALNE: filtr pod własną niszę; bez niego ranking wg wartości strony)
+python3 recon_tools.py ingest "eksport.xlsx" --domain konkurent.pl --top 40 --out recon_out
 
 # 2. (Claude) czyta recon_out/worksheet.md i pisze recon_out/judgments.json
 #    per URL: page_type, main_keyword, relevance (0-1), junk_keywords, content_type, note
@@ -78,5 +83,5 @@ Szczegóły kalibracji i historia zmian w [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
-Zbudowany dla [Double Digital](https://double-digital.pl), generalizuje na dowolną niszę przez
-`--our-topics`. Domyślny `--our-domain` to `double-digital.pl` (zmień na własną domenę/klienta).
+Zbudowany pierwotnie dla [Double Digital](https://double-digital.pl), ale **domyślnie działa na
+dowolnym eksporcie bez żadnej konfiguracji** — pod własną niszę dorzuć `--our-topics`.

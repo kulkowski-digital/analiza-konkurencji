@@ -369,14 +369,16 @@ def _select_worksheet_pages(pages, top):
 def _write_worksheet(out, domain, btoks, our_domain, our_topics, pages, top):
     sel = _select_worksheet_pages(pages, top)
     L = []
+    nf = our_topics or our_domain
     L.append(f"# Worksheet osądu — {domain}")
     L.append("")
-    L.append(f"Brand: `{', '.join(sorted(btoks))}` · Rozwijamy: `{our_domain or '—'}`"
-             + (f" · Nisza/temat: {our_topics}" if our_topics else ""))
+    L.append(f"Brand: `{', '.join(sorted(btoks))}`"
+             + (f" · Filtr niszy: `{nf}`" if nf else " · Tryb: ranking wg wartości strony do odtworzenia"))
     L.append("")
     L.append(f"**Osądź KAŻDĄ z {len(sel)} stron poniżej** → wpisz do `judgments.json` (klucz = url). "
-             "Pola: `page_type`, `main_keyword`, `relevance` (0–1 dopasowanie do niszy, którą "
-             "rozwijamy), `junk_keywords`, `content_type`, `note`. Szczegóły w SKILL.md. "
+             "Pola: `page_type`, `main_keyword`, `relevance` (0–1 wartość strony DO ODTWORZENIA"
+             + (" + dopasowanie do podanej niszy" if nf else "")
+             + "), `junk_keywords`, `content_type`, `note`. Szczegóły w SKILL.md. "
              "Strony NIE osądzone trafią do długiego ogona (poza P1/P2/P3) — dlatego nie pomijaj.")
     L.append("")
     L.append("Pule selekcji: **📊ruch** (duży obecny ruch) · **💰cpc** (wysoka wartość komercyjna) · "
@@ -491,10 +493,11 @@ def cmd_score(args):
 
 def _write_report(out, data, pages):
     L = [f"# Plan odtworzenia ruchu — {data['domain']}", ""]
-    grow = data.get("our_topics") or data.get("our_domain") or "—"
-    L.append(f"Brand: `{', '.join(data['brand_tokens'])}` · Rozwijamy: `{grow}`")
+    nf = data.get("our_topics") or data.get("our_domain")
+    L.append(f"Brand: `{', '.join(data['brand_tokens'])}`"
+             + (f" · Filtr niszy: `{nf}`" if nf else " · Tryb: ranking wg wartości strony do odtworzenia"))
     L.append("")
-    L.append("Priorytet = dopasowanie biznesowe × (√(ruch+latent) + szerokość fraz + wartość komercyjna) "
+    L.append("Priorytet = wartość strony × (√(ruch+latent) + szerokość fraz + wartość komercyjna) "
              "− kara za trudność. Tiery są **względne** (ranking osądzonych stron): "
              "**P1** = top, rób najpierw · **P2/P3** niżej · **SKIP** = świadomie odpuszczone "
              "(brand/off-topic/system) · **🎯** = open goal (jest popyt, konkurent słabo rankuje → łatwy łup).")
@@ -570,8 +573,8 @@ def main():
     pi = sub.add_parser("ingest")
     pi.add_argument("file")
     pi.add_argument("--domain", default=None, help="domena konkurenta (auto z URL jeśli brak)")
-    pi.add_argument("--our-domain", default="double-digital.pl", help="domena, którą rozwijamy (DD lub klient) — baza oceny relevance")
-    pi.add_argument("--our-topics", default=None, help="opcjonalny opis niszy/tematów, które rozwijamy (gdy konkurent z innej branży niż DD)")
+    pi.add_argument("--our-domain", default=None, help="OPCJONALNIE: domena, którą rozwijamy — gdy chcesz dodatkowo filtrować pod własną stronę")
+    pi.add_argument("--our-topics", default=None, help="OPCJONALNIE: opis niszy/tematów do filtra dopasowania (np. 'baterie łazienkowe'); bez tego skill rankuje wg wartości strony do odtworzenia")
     pi.add_argument("--top", type=int, default=40, help="ile stron w worksheet do osądu")
     pi.add_argument("--out", default="recon_out")
     pi.set_defaults(func=cmd_ingest)
