@@ -1,0 +1,26 @@
+{
+  "skill_name": "competitor-recon",
+  "evals": [
+    {
+      "id": 0,
+      "name": "agency-kaman",
+      "prompt": "Mam eksport widoczności konkurenta z Senuto: /Users/maciekkulkowski/Downloads/analiza_widoczno_ci_raport__kamanmarketing_pl_2026_06_29_09_17.xlsx . To agencja marketingowa, my (double-digital.pl) jesteśmy w tej samej branży. Powiedz mi, które ICH strony są najważniejsze do odtworzenia, żeby przejąć ruch — z priorytetem, głównym słowem kluczowym (main keyword) i typem strony (blog/usługa). Odsiej frazy brandowe i zbyt generyczne, na które nie ma sensu rankować.",
+      "expected_output": "Ranking stron konkurenta w tierach (P1/P2/P3/SKIP) z main keyword, typem strony, ruchem do przejęcia; brand (kaman*) i generyki (dropship/landing/biogram) odsiane; pliki report.md + priorities.csv.",
+      "files": ["/Users/maciekkulkowski/Downloads/analiza_widoczno_ci_raport__kamanmarketing_pl_2026_06_29_09_17.xlsx"]
+    },
+    {
+      "id": 1,
+      "name": "events-projektefektywny",
+      "prompt": "Załączam wyciąg z Senuto dla konkurenta mojego klienta: /Users/maciekkulkowski/Downloads/analiza_widoczno_ci_raport__projektefektywny_pl_2026_06_29_09_46.xlsx . Klient działa w branży team building / organizacja imprez i wyjazdów integracyjnych dla firm. Które strony tego konkurenta warto u nas odtworzyć, żeby zabrać im ruch? Daj priorytety i wskaż, co odpuścić.",
+      "expected_output": "Tiery P1/P2/P3/SKIP dopasowane do niszy eventowej (nie do DD); strony ofertowe (organizacja imprez, team building, wyjazdy integracyjne) jako P1; traffic-bait typu 'starodawne gry' jako SKIP; report.md + priorities.csv.",
+      "files": ["/Users/maciekkulkowski/Downloads/analiza_widoczno_ci_raport__projektefektywny_pl_2026_06_29_09_46.xlsx"]
+    },
+    {
+      "id": 2,
+      "name": "ecommerce-bluewater",
+      "prompt": "Tu jest eksport widoczności sklepu internetowego /Users/maciekkulkowski/Downloads/analiza_widoczno_ci_raport__bluewater_pl_2026_06_29_10_05.xlsx — sprzedają baterie i armaturę łazienkową/kuchenną. Chcę wiedzieć, które ich strony (kategorie, produkty, blog) są najcenniejsze pod kątem przejęcia ruchu i które powinniśmy odtworzyć w pierwszej kolejności. Rozróżnij typy stron i odpuść to, co nie ma sensu.",
+      "expected_output": "Rozpoznane typy ecommerce (category/product/region/system); kategorie jako money pages P1; produkty z własnym SKU oraz URL-e systemowe (files.php) odsiane do SKIP; report.md + priorities.csv.",
+      "files": ["/Users/maciekkulkowski/Downloads/analiza_widoczno_ci_raport__bluewater_pl_2026_06_29_10_05.xlsx"]
+    }
+  ]
+}
