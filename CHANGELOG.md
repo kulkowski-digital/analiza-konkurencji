@@ -102,3 +102,16 @@ Skill nie zakłada już żadnej „naszej" strony (wcześniej `--our-domain` dom
 - Nagłówki report/worksheet: „Tryb: ranking wg wartości strony" (bez niszy) lub „Filtr niszy: …".
 - SKILL.md przeramowane: relevance = „wartość strony do odtworzenia", nie „dopasowanie do DD";
   usunięte twarde odniesienia do double-digital.pl z zasad osądu i przykładów.
+
+## 2026-06-30 — v2.3 (report.md czytelny dla nie-eksperta)
+Raport był gęsty i żargonowy (score 72.4, latent, KD, CPC, wzór ze √) + setki rozwlekłych kart
+P3/SKIP. Przepisany `report.md` (twarde liczby zostają w `priorities.csv` — dla profesjonalisty):
+
+- **Plain-language** wstęp + „Jak to czytać" (🔴 zrób najpierw / 🟠 potem / 🟡 później / 🎯 łatwy łup
+  / ⏭️ odpuść) + sekcja **„⭐ W skrócie"** (ile stron, dominujący typ, największa okazja, luki).
+- **Żargon przetłumaczony:** `latent` → „popyt, którego konkurent nie łapie"; `KD` → trudność
+  słowna (bardzo niska…bardzo wysoka); typy stron po polsku („kategoria sklepu", „wpis blogowy");
+  score ukryty (numeracja w sekcji); CPC schowane do CSV.
+- **Karty P1/P2** = plain zdanie „co zrobić + dlaczego" + 1 linia skali + frazy + wzór URL + opcjonalny
+  💡 komentarz eksperta. **P3/SKIP/TAIL zwinięte** do jednolinijkowców (z setek linii → ~300).
+- Sekcja **„🎯 Najszybsze łupy"** zbiorczo. Footer: „pełne liczby w priorities.csv".

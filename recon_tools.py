@@ -491,75 +491,183 @@ def cmd_score(args):
     print(f"OK. {dict(tiers)} → {out}/report.md, priorities.csv")
     print("   (TAIL = nieosądzone, poza rekomendacjami; osądź więcej stron, by je podnieść)")
 
+# ── pomocnicze: tłumaczenie żargonu na język ludzki (czytelny raport) ──
+TYPE_PL = {
+    "category": "kategoria sklepu", "product": "karta produktu", "service": "strona usługowa",
+    "service_local": "strona lokalna (miasto)", "blog": "wpis blogowy / poradnik",
+    "homepage": "strona główna", "taxonomy": "lista/tag", "region": "lokalizator oddziałów",
+    "system": "adres systemowy", "unknown": "strona",
+}
+def _type_pl(t): return TYPE_PL.get(t, t)
+
+def _kd_band(kd):
+    if kd <= 20: return "bardzo niska"
+    if kd <= 35: return "niska"
+    if kd <= 50: return "średnia"
+    if kd <= 70: return "wysoka"
+    return "bardzo wysoka"
+
+def _n(x):
+    """Liczba z odstępem tysięcy, po polsku: 11560 → '11 560'."""
+    return f"{int(round(x)):,}".replace(",", " ")
+
+def _action(p):
+    """Plain zdanie 'co zrobić' wg typu strony."""
+    kw = p["final_main_kw"]
+    t = p["final_type"]
+    q = "„" + kw + "”"          # „kw” z polskimi cudzysłowami (curly, nie psują stringa)
+    if t == "category":
+        return f"Zbuduj u siebie **kategorię** {q}."
+    if t == "product":
+        return f"Pokryj temat {q} — najlepiej **kategorią** (nie pojedynczym produktem)."
+    if t in ("service", "service_local"):
+        return f"Zrób **stronę usługową** {q}."
+    if t == "blog":
+        return f"Napisz **treść/poradnik** {q}."
+    return f"Zrób stronę pod {q}."
+
+def _why(p):
+    if p.get("open_goal"):
+        return "Łatwy łup — ludzie często tego szukają, a konkurent ledwo to obsługuje."
+    if p["effective_traffic"] >= 100:
+        return "Konkurent ma z tego sporo ruchu — warto przejąć."
+    if p["max_cpc"] >= 4:
+        return "Temat o wysokiej wartości zakupowej (drogie kliknięcia w reklamie)."
+    return "Realny temat w tej branży."
+
+def _scale_line(p):
+    if p.get("open_goal") and p["latent_potential"] > 0:
+        s = f"📊 **Potencjał:** ~{_n(p['latent_potential'])} wyszukiwań/mc, których konkurent NIE łapie"
+        if p["effective_traffic"] >= 1:
+            s += f" (dziś ma z tej strony ~{_n(p['effective_traffic'])} wizyt/mc)"
+        return s
+    if p["effective_traffic"] >= 1:
+        return f"📊 **Ruch konkurenta:** ~{_n(p['effective_traffic'])} wizyt/mc z tej strony"
+    return "📊 **Mały ruch dziś**, ale temat obecny w niszy"
+
+def _phrases(p, n=6):
+    return [k["kw"] for k in p["keywords"]
+            if k["flag"] not in ("brand", "foreign") and k["kw"] != p["final_main_kw"]][:n]
+
 def _write_report(out, data, pages):
-    L = [f"# Plan odtworzenia ruchu — {data['domain']}", ""]
-    nf = data.get("our_topics") or data.get("our_domain")
-    L.append(f"Brand: `{', '.join(data['brand_tokens'])}`"
-             + (f" · Filtr niszy: `{nf}`" if nf else " · Tryb: ranking wg wartości strony do odtworzenia"))
-    L.append("")
-    L.append("Priorytet = wartość strony × (√(ruch+latent) + szerokość fraz + wartość komercyjna) "
-             "− kara za trudność. Tiery są **względne** (ranking osądzonych stron): "
-             "**P1** = top, rób najpierw · **P2/P3** niżej · **SKIP** = świadomie odpuszczone "
-             "(brand/off-topic/system) · **🎯** = open goal (jest popyt, konkurent słabo rankuje → łatwy łup).")
-    L.append("")
-
-    # rozkład typów stron — pomaga zauważyć LUKI (np. konkurent nie ma bloga → niezagospodarowany popyt info)
     from collections import Counter
-    tdist = Counter(p["final_type"] for p in pages if p["tier"] != "TAIL")
-    if tdist:
-        L.append("**Typy stron (osądzone):** "
-                 + " · ".join(f"{t}={n}" for t, n in tdist.most_common()))
-        L.append("")
+    L = [f"# Które strony zbudować, żeby przejąć ruch — {data['domain']}", ""]
+    nf = data.get("our_topics") or data.get("our_domain")
+    L.append(f"Analiza widoczności konkurenta **{data['domain']}**. Poniżej jego strony warte "
+             "odtworzenia u Ciebie — uszeregowane od najważniejszych. Każda ma **główną frazę** "
+             "(po co ją robić) i przykładowe wyszukiwania, na które konkurent się pokazuje."
+             + (f" Oceniane pod niszę: _{nf}_." if nf else ""))
+    L.append("")
+    L.append("**Jak to czytać:**")
+    L.append("- 🔴 **Zrób najpierw** — największa wartość, zacznij tutaj.")
+    L.append("- 🟠 **Potem** · 🟡 **Później** — dobre, ale mniej pilne.")
+    L.append("- 🎯 **Łatwy łup** — ludzie tego szukają, a konkurent słabo to obsługuje → najszybszy zysk.")
+    L.append("- ⏭️ **Odpuść** — brand konkurenta, strony systemowe, przypadkowy ruch (nie ma co kopiować).")
+    L.append("")
 
-    for tier in ("P1", "P2", "P3", "SKIP"):
-        grp = [p for p in pages if p["tier"] == tier]
+    by = lambda t: [p for p in pages if p["tier"] == t]
+    p1, p2, p3, skip = by("P1"), by("P2"), by("P3"), by("SKIP")
+
+    # ── W skrócie (TL;DR) ──
+    recs = p1 + p2
+    L.append("## ⭐ W skrócie")
+    L.append("")
+    if recs:
+        topt = Counter(_type_pl(p["final_type"]) for p in recs).most_common(1)[0][0]
+        biggest = max(recs, key=lambda p: p["latent_potential"] + p["effective_traffic"])
+        L.append(f"- Znaleziono **{len(p1)} stron do zrobienia od razu** i **{len(p2)} kolejnych** "
+                 f"(plus {len(p3)} mniej pilnych).")
+        L.append(f"- Najczęściej do zbudowania: **{topt}**.")
+        L.append(f"- Największa pojedyncza okazja: **{biggest['final_main_kw']}** — "
+                 f"~{_n(biggest['latent_potential'] or biggest['effective_traffic'])} "
+                 f"wyszukiwań/mc w grze.")
+    else:
+        L.append("- Brak osądzonych stron — uzupełnij `judgments.json` i przelicz `score`.")
+    # luka: brak typu, którego można by się spodziewać (np. blog)
+    types_present = {p["final_type"] for p in recs}
+    if recs and "blog" not in types_present and "category" in types_present:
+        L.append("- 💡 Luka: konkurent **nie ma treści blogowych/poradników** — to niezagospodarowany "
+                 "ruch informacyjny, który możesz przejąć contentem.")
+    L.append("")
+
+    # ── Pełne karty: P1 i P2 ──
+    for tier, head in (("P1", "🔴 Zrób najpierw"), ("P2", "🟠 Potem")):
+        grp = by(tier)
         if not grp: continue
-        L.append(f"## {tier} ({len(grp)})")
+        L.append(f"## {head} ({len(grp)})")
         L.append("")
-        for p in grp:
-            goal = " 🎯" if p.get("open_goal") and p["tier"] != "SKIP" else ""
-            L.append(f"### [{p['score']}]{goal} {p['final_main_kw']}  ·  _{p['final_type']}_")
-            L.append(f"- **Źródło konkurenta:** {p['url']}")
-            L.append(f"- **Co zbudować:** {p['content_type']}"
-                     + (f" — {p['note']}" if p["note"] else ""))
-            pot = (f" · **potencjał (open goal):** {p['latent_potential']} wol. na słabo zajętych frazach"
-                   if p.get("open_goal") else "")
-            L.append(f"- **Ruch do przejęcia:** {p['effective_traffic']} / mc "
-                     f"· fraz: {p['qualified_kw_count']} · max CPC: {p['max_cpc']} "
-                     f"· trudność (KD): {p['avg_kd']} · konkurent na poz. {p['best_position']:g}{pot}")
-            support = [k["kw"] for k in p["keywords"]
-                       if k["flag"] not in ("brand", "foreign") and k["kw"] != p["final_main_kw"]][:6]
-            if support:
-                L.append(f"- **Frazy wspierające:** {', '.join(support)}")
+        for i, p in enumerate(grp, 1):
+            goal = " 🎯 _łatwy łup_" if p.get("open_goal") else ""
+            title = (p["final_main_kw"][:1].upper() + p["final_main_kw"][1:]) if p["final_main_kw"] else p["url"]
+            L.append(f"### {i}. {title}{goal}")
+            L.append(f"*{_type_pl(p['final_type'])}*")
+            L.append("")
+            L.append(f"{_action(p)} {_why(p)}")   # _action ma już własny **bold** w środku
+            L.append("")
+            L.append(f"- {_scale_line(p)}")
+            L.append(f"- 🎚️ **Trudność:** {_kd_band(p['avg_kd'])} · "
+                     f"**powiązanych fraz:** {p['qualified_kw_count']}")
+            ph = _phrases(p)
+            if ph:
+                L.append(f"- 🔑 **Frazy, na które się pokazuje:** {' · '.join(ph)}")
+            L.append(f"- 🔗 **Wzór u konkurenta:** {p['url']}")
+            if p["note"]:
+                L.append(f"- 💡 _Komentarz: {p['note']}_")
             L.append("")
 
-    # Open goals — tylko rekomendowane (P1/P2): duży latentny popyt + dopasowanie do nas.
-    # P3 świadomie pomijamy — open-goal z niskim relevance to nie "szybki łup", tylko szum.
-    goals = sorted([p for p in pages if p.get("open_goal") and p["tier"] in ("P1", "P2")],
-                   key=lambda p: -p["latent_potential"])[:10]
-    if goals:
-        L.append("## 🎯 Open goals — szybkie łupy (jest popyt, konkurent słabo rankuje)")
+    # ── P3: zwięzła lista ──
+    if p3:
+        L.append(f"## 🟡 Później — mniej pilne ({len(p3)})")
         L.append("")
-        for p in goals:
-            L.append(f"- **{p['final_main_kw']}** ({p['final_type']}, {p['tier']}) — "
-                     f"latent {p['latent_potential']} wol., konkurent poz. {p['best_position']:g}, "
-                     f"obecny ruch {p['effective_traffic']}/mc · {p['url']}")
+        for p in p3:
+            goal = " 🎯" if p.get("open_goal") else ""
+            metric = (f"~{_n(p['latent_potential'])} wyszuk./mc do wzięcia"
+                      if p.get("open_goal") and p["latent_potential"] > 0
+                      else f"~{_n(p['effective_traffic'])} wizyt/mc" if p["effective_traffic"] >= 1
+                      else "niszowa")
+            L.append(f"- **{p['final_main_kw']}**{goal} _({_type_pl(p['final_type'])})_ — "
+                     f"{metric}, trudność {_kd_band(p['avg_kd'])} · {p['url']}")
         L.append("")
 
-    # Długi ogon — nieosądzone (NIE rekomendacje; kandydaci do pogłębienia jeśli mają ruch/potencjał)
-    tail = [p for p in pages if p["tier"] == "TAIL"]
-    if tail:
-        tail_sorted = sorted(tail, key=lambda p: -(p["effective_traffic"] + p["latent_potential"] * 0.1))
-        shown = [p for p in tail_sorted if p["effective_traffic"] > 0 or p["open_goal"]][:12]
-        L.append(f"## Długi ogon — nieosądzone ({len(tail)})")
+    # ── Odpuść: jednolinijkowce z powodem ──
+    if skip:
+        L.append(f"## ⏭️ Odpuść ({len(skip)})")
         L.append("")
-        L.append("Strony spoza puli osądu — **niezweryfikowane**, nie traktuj jako rekomendacji. "
-                 "Jeśli któraś poniżej ma realny ruch/potencjał, dorzuć ją do `judgments.json` i przelicz `score`.")
+        L.append("Nie ma sensu tego kopiować:")
+        for p in skip:
+            reason = ((p["note"][:80] + ("…" if len(p["note"]) > 80 else "")) if p["note"]
+                      else {"system": "adres systemowy", "region": "lokalizator oddziałów",
+                            "homepage": "strona główna (żyje z brandu)"}.get(p["final_type"], "niska wartość"))
+            L.append(f"- {p['final_main_kw'] or p['url']} _({_type_pl(p['final_type'])})_ — {reason}")
+        L.append("")
+
+    # ── Najszybsze łupy zbiorczo ──
+    goals = sorted([p for p in recs if p.get("open_goal")],
+                   key=lambda p: -p["latent_potential"])[:8]
+    if goals:
+        L.append("## 🎯 Najszybsze łupy (jest popyt, konkurent słabo rankuje)")
+        L.append("")
+        for p in goals:
+            L.append(f"- **{p['final_main_kw']}** — ~{_n(p['latent_potential'])} wyszukiwań/mc do wzięcia "
+                     f"(konkurent słabo obsługuje te frazy)")
+        L.append("")
+
+    # ── Reszta (nieanalizowana) — tylko liczba + parę przykładów ──
+    tail = by("TAIL")
+    if tail:
+        shown = sorted([p for p in tail if p["url"] and (p["effective_traffic"] > 0 or p["open_goal"])],
+                       key=lambda p: -(p["effective_traffic"] + p["latent_potential"] * 0.1))[:8]
+        L.append(f"## Reszta — {len(tail)} stron nieanalizowanych")
+        L.append("")
+        L.append("To długi ogon o małym ruchu (poza główną pulą). Zwykle można pominąć. "
+                 "Gdyby któraś poniżej okazała się ciekawa, można ją doanalizować:")
         L.append("")
         for p in shown:
-            L.append(f"- _{p['final_type']}_ · ruch {p['effective_traffic']}/mc · "
-                     f"latent {p['latent_potential']} · {p['url']}")
+            L.append(f"- _{_type_pl(p['final_type'])}_ · {p['url']}")
         L.append("")
+
+    L.append("---")
+    L.append("_Pełne liczby (ruch, CPC, KD, score, latent) są w `priorities.csv`._")
 
     with open(os.path.join(out, "report.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(L))
